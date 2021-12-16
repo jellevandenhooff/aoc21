@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"io"
 	"log"
+	"math"
 	"os"
 	"strings"
 )
@@ -35,24 +36,26 @@ func Parse(s *State, d string) int {
 	typ := s.Read(3)
 	log.Println(d, "typ", typ)
 
-	ans := 0
-	ans += version
-
 	switch typ {
 	// literal
 	case 4:
 		log.Println(d, "literal")
+		v := 0
 		for {
 			c := s.Read(5)
 			log.Println(d, "part", c)
+			v = (v << 4) | (c & ((1 << 4) - 1))
 			if c&(1<<4) == 0 {
 				log.Println(d, "bailing")
 				break
 			}
+			log.Println(d, "v", v)
 		}
+		return v
 
 	default:
 		log.Println(d, "operator")
+		var vs []int
 
 		lenType := s.Read(1)
 		log.Println(d, "lentype", lenType)
@@ -66,18 +69,64 @@ func Parse(s *State, d string) int {
 				bits: subBits,
 			}
 			for subS.idx < len(subS.bits) {
-				ans += Parse(subS, d+"  ")
+				vs = append(vs, Parse(subS, d+"  "))
 			}
 		case 1:
 			numPackets := s.Read(11)
 			log.Println(d, "numpackets", numPackets)
 			for i := 0; i < numPackets; i++ {
-				ans += Parse(s, d+"  ")
+				vs = append(vs, Parse(s, d+"  "))
 			}
+		}
+
+		switch typ {
+		case 0:
+			ans := 0
+			for _, v := range vs {
+				ans += v
+			}
+			return ans
+		case 1:
+			ans := 1
+			for _, v := range vs {
+				ans *= v
+			}
+			return ans
+		case 2:
+			ans := math.MaxInt64
+			for _, v := range vs {
+				if v < ans {
+					ans = v
+				}
+			}
+			return ans
+		case 3:
+			ans := math.MinInt64
+			for _, v := range vs {
+				if v > ans {
+					ans = v
+				}
+			}
+			return ans
+		case 5:
+			if vs[0] > vs[1] {
+				return 1
+			}
+			return 0
+		case 6:
+			if vs[0] < vs[1] {
+				return 1
+			}
+			return 0
+		case 7:
+			if vs[0] == vs[1] {
+				return 1
+			}
+			return 0
 		}
 	}
 
-	return ans
+	panic("help")
 }
 
 func main() {
