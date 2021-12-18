@@ -33,64 +33,51 @@ func main() {
 
 	log.Println(x1, x2, y1, y2)
 
-	bestDYByStep := make(map[int]int)
-	highestYByStep := make(map[int]int)
-	allByStep := make(map[int][]int)
-
-	for initDy := -10000; initDy <= 10000; initDy++ {
-		dy := initDy
-		y := 0
-
-		highest := 0
-
-		for step := 0; step < 10000; step++ {
-			y += dy
-			dy--
-
-			if y > highest {
-				highest = y
-			}
-
-			if y >= y1 && y <= y2 {
-				if prev, ok := highestYByStep[step]; !ok || highest > prev {
-					highestYByStep[step] = highest
-					bestDYByStep[step] = initDy
-				}
-				allByStep[step] = append(allByStep[step], initDy)
-			}
-		}
-	}
-
 	total := 0
-	best := 0
+	allHighest := 0
 
 	for initDx := 1; initDx <= x2; initDx++ {
-		dx := initDx
-		x := 0
+		for initDy := -200; initDy <= 200; initDy++ {
+			dx := initDx
+			dy := initDy
+			x := 0
+			y := 0
 
-		works := make(map[int]bool)
+			highest := 0
+			counted := false
 
-		for step := 0; step < 10000; step++ {
-			x += dx
-			if dx > 0 {
-				dx--
-			}
+			for step := 0; step < 10000; step++ {
+				y += dy
+				dy--
 
-			if x >= x1 && x <= x2 {
-				if highest, ok := highestYByStep[step]; ok {
-					if highest > best {
-						best = highest
-						log.Println(initDx, bestDYByStep[step], highest)
-					}
+				x += dx
+				if dx > 0 {
+					dx--
 				}
-				for _, initDy := range allByStep[step] {
-					works[initDy] = true
+
+				if y > highest {
+					highest = y
+				}
+
+				if x > x2 {
+					break
+				}
+				if x < x1 && dx <= 0 {
+					break
+				}
+				if x >= x1 && x <= x2 && y >= y1 && y <= y2 {
+					if highest > allHighest {
+						allHighest = highest
+					}
+					if !counted {
+						log.Println(initDy)
+						counted = true
+						total++
+					}
 				}
 			}
 		}
-
-		total += len(works)
 	}
 
-	log.Println(total)
+	log.Println(total, allHighest)
 }
