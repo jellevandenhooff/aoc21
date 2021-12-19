@@ -8,36 +8,33 @@ import (
 	"strings"
 )
 
-type Rot struct {
-	Ord  []int
-	Flip []int
-}
+type Mat [4][4]int
 
-func applyRot(r Rot, p []int) []int {
-	return []int{
-		r.Flip[0] * p[r.Ord[0]],
-		r.Flip[1] * p[r.Ord[1]],
-		r.Flip[2] * p[r.Ord[2]],
+func applyMat(m Mat, p []int) []int {
+	p = append(p, 1)
+	q := make([]int, 4)
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 4; j++ {
+			q[i] += m[i][j] * p[j]
+		}
 	}
+	return q[:3]
 }
 
-func chainRot(a, b Rot) Rot {
-	return Rot{
-		Flip: []int{
-			a.Flip[0] * b.Flip[a.Ord[0]],
-			a.Flip[1] * b.Flip[a.Ord[1]],
-			a.Flip[2] * b.Flip[a.Ord[2]],
-		},
-		Ord: []int{
-			b.Ord[a.Ord[0]],
-			b.Ord[a.Ord[1]],
-			b.Ord[a.Ord[2]],
-		},
+func multMat(a, b Mat) Mat {
+	var c Mat
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 4; j++ {
+			for k := 0; k < 4; k++ {
+				c[i][j] += a[i][k] * b[k][j]
+			}
+		}
 	}
+	return c
 }
 
-func makeRotations() []Rot {
-	var rotations []Rot
+func makeRotations() []Mat {
+	var rotations []Mat
 	for i := 0; i < 3*3*3; i++ {
 		ord := []int{i % 3, (i / 3) % 3, (i / 9) % 3}
 		if ord[0] == ord[1] || ord[1] == ord[2] || ord[0] == ord[2] {
@@ -45,10 +42,12 @@ func makeRotations() []Rot {
 		}
 		for j := 0; j < 2*2*2; j++ {
 			flip := []int{(j%2)*2 - 1, ((j/2)%2)*2 - 1, ((j/4)%2)*2 - 1}
-			rotations = append(rotations, Rot{
-				Ord:  ord,
-				Flip: flip,
-			})
+			var m Mat
+			for k := 0; k < 3; k++ {
+				m[k][ord[k]] = flip[k]
+			}
+			m[3][3] = 1
+			rotations = append(rotations, m)
 		}
 	}
 	return rotations
@@ -91,24 +90,6 @@ func lookupMap(a [][]int) map[Pt]bool {
 		m[toPt(pt)] = true
 	}
 	return m
-}
-
-type Transform struct {
-	Offset []int
-	Rot    Rot
-}
-
-func applyTransform(t Transform, pt []int) []int {
-	pt = applyRot(t.Rot, pt)
-	pt = add(pt, t.Offset)
-	return pt
-}
-
-func chainTransforms(a, b Transform) Transform {
-	return Transform{
-		Offset: add(applyRot(a.Rot, b.Offset), a.Offset),
-		Rot:    chainRot(a.Rot, b.Rot),
-	}
 }
 
 func inRange(a []int) bool {
@@ -177,13 +158,12 @@ func main() {
 
 	rotations := makeRotations()
 
-	transforms := make(map[int]Transform)
-	transforms[0] = Transform{
-		Offset: []int{0, 0, 0},
-		Rot: Rot{
-			Ord:  []int{0, 1, 2},
-			Flip: []int{1, 1, 1},
-		},
+	transforms := make(map[int]Mat)
+	transforms[0] = Mat{
+		{1, 0, 0, 0},
+		{0, 1, 0, 0},
+		{0, 0, 1, 0},
+		{0, 0, 0, 1},
 	}
 
 	queue := []int{0}
@@ -203,14 +183,17 @@ func main() {
 			for _, rot := range rotations {
 				var ptsB [][]int
 				for _, pt := range scanners[j] {
-					ptsB = append(ptsB, applyRot(rot, pt))
+					ptsB = append(ptsB, applyMat(rot, pt))
 				}
 				if offset, ok := overlap(ptsA, ptsB); ok {
+					translate := Mat{
+						{1, 0, 0, offset[0]},
+						{0, 1, 0, offset[1]},
+						{0, 0, 1, offset[2]},
+						{0, 0, 0, 1},
+					}
+					transforms[j] = multMat(transforms[i], multMat(translate, rot))
 					queue = append(queue, j)
-					transforms[j] = chainTransforms(transforms[i], Transform{
-						Offset: offset,
-						Rot:    rot,
-					})
 					break
 				}
 			}
@@ -220,14 +203,15 @@ func main() {
 	all := make(map[Pt]bool)
 	for i := range scanners {
 		for _, pt := range scanners[i] {
-			all[toPt(applyTransform(transforms[i], pt))] = true
+			all[toPt(applyMat(transforms[i], pt))] = true
 		}
 	}
 	log.Println(len(all))
 
 	locs := [][]int{}
 	for i := range scanners {
-		locs = append(locs, transforms[i].Offset)
+		pt := applyMat(transforms[i], []int{0, 0, 0})
+		locs = append(locs, pt)
 	}
 
 	mx := 0
