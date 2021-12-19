@@ -10,6 +10,13 @@ import (
 
 type Mat [4][4]int
 
+var Ident = Mat{
+	{1, 0, 0, 0},
+	{0, 1, 0, 0},
+	{0, 0, 1, 0},
+	{0, 0, 0, 1},
+}
+
 func applyMat(m Mat, p []int) []int {
 	p = append(p, 1)
 	q := make([]int, 4)
@@ -31,6 +38,15 @@ func multMat(a, b Mat) Mat {
 		}
 	}
 	return c
+}
+
+func translateMat(offset []int) Mat {
+	return Mat{
+		{1, 0, 0, offset[0]},
+		{0, 1, 0, offset[1]},
+		{0, 0, 1, offset[2]},
+		{0, 0, 0, 1},
+	}
 }
 
 func makeRotations() []Mat {
@@ -159,12 +175,7 @@ func main() {
 	rotations := makeRotations()
 
 	transforms := make(map[int]Mat)
-	transforms[0] = Mat{
-		{1, 0, 0, 0},
-		{0, 1, 0, 0},
-		{0, 0, 1, 0},
-		{0, 0, 0, 1},
-	}
+	transforms[0] = Ident
 
 	queue := []int{0}
 	for len(queue) > 0 {
@@ -186,13 +197,7 @@ func main() {
 					ptsB = append(ptsB, applyMat(rot, pt))
 				}
 				if offset, ok := overlap(ptsA, ptsB); ok {
-					translate := Mat{
-						{1, 0, 0, offset[0]},
-						{0, 1, 0, offset[1]},
-						{0, 0, 1, offset[2]},
-						{0, 0, 0, 1},
-					}
-					transforms[j] = multMat(transforms[i], multMat(translate, rot))
+					transforms[j] = multMat(transforms[i], multMat(translateMat(offset), rot))
 					queue = append(queue, j)
 					break
 				}
