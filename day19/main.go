@@ -21,64 +21,19 @@ func applyRot(r Rot, p []int) []int {
 	}
 }
 
-func sub(a, b []int) []int {
-	return []int{a[0] - b[0], a[1] - b[1], a[2] - b[2]}
-}
-
-func add(a, b []int) []int {
-	return []int{a[0] + b[0], a[1] + b[1], a[2] + b[2]}
-}
-
-type Pt struct {
-	X, Y, Z int
-}
-
-func abs(x int) int {
-	if x < 0 {
-		return -x
+func chainRot(a, b Rot) Rot {
+	return Rot{
+		Flip: []int{
+			a.Flip[0] * b.Flip[a.Ord[0]],
+			a.Flip[1] * b.Flip[a.Ord[1]],
+			a.Flip[2] * b.Flip[a.Ord[2]],
+		},
+		Ord: []int{
+			b.Ord[a.Ord[0]],
+			b.Ord[a.Ord[1]],
+			b.Ord[a.Ord[2]],
+		},
 	}
-	return x
-}
-
-func sz(x []int) int {
-	return abs(x[0]) + abs(x[1]) + abs(x[2])
-}
-
-func toPt(a []int) Pt {
-	return Pt{
-		X: a[0],
-		Y: a[1],
-		Z: a[2],
-	}
-}
-
-func inRange(a []int) bool {
-	return a[0] <= 1000 && a[0] >= -1000 &&
-		a[1] <= 1000 && a[1] >= -1000 &&
-		a[2] <= 1000 && a[2] >= -1000
-}
-
-func lookupMap(a [][]int) map[Pt]bool {
-	m := make(map[Pt]bool)
-	for _, pt := range a {
-		m[toPt(pt)] = true
-	}
-	return m
-}
-
-type Chain struct {
-	Prev   *Chain
-	Offset []int
-	Rot    Rot
-}
-
-func applyChain(ch *Chain, pt []int) []int {
-	for ch != nil {
-		pt = applyRot(ch.Rot, pt)
-		pt = add(pt, ch.Offset)
-		ch = ch.Prev
-	}
-	return pt
 }
 
 func makeRotations() []Rot {
@@ -99,53 +54,96 @@ func makeRotations() []Rot {
 	return rotations
 }
 
+func sub(a, b []int) []int {
+	return []int{a[0] - b[0], a[1] - b[1], a[2] - b[2]}
+}
+
+func add(a, b []int) []int {
+	return []int{a[0] + b[0], a[1] + b[1], a[2] + b[2]}
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func sz(x []int) int {
+	return abs(x[0]) + abs(x[1]) + abs(x[2])
+}
+
+type Pt struct {
+	X, Y, Z int
+}
+
+func toPt(a []int) Pt {
+	return Pt{
+		X: a[0],
+		Y: a[1],
+		Z: a[2],
+	}
+}
+
+func lookupMap(a [][]int) map[Pt]bool {
+	m := make(map[Pt]bool)
+	for _, pt := range a {
+		m[toPt(pt)] = true
+	}
+	return m
+}
+
+type Transform struct {
+	Offset []int
+	Rot    Rot
+}
+
+func applyTransform(t Transform, pt []int) []int {
+	pt = applyRot(t.Rot, pt)
+	pt = add(pt, t.Offset)
+	return pt
+}
+
+func chainTransforms(a, b Transform) Transform {
+	return Transform{
+		Offset: add(applyRot(a.Rot, b.Offset), a.Offset),
+		Rot:    chainRot(a.Rot, b.Rot),
+	}
+}
+
+func inRange(a []int) bool {
+	return a[0] <= 1000 && a[0] >= -1000 &&
+		a[1] <= 1000 && a[1] >= -1000 &&
+		a[2] <= 1000 && a[2] >= -1000
+}
+
+func scanWorks(offset []int, ptsB [][]int, aMap map[Pt]bool) bool {
+	cnt := 0
+	for _, m := range ptsB {
+		mapped := add(m, offset)
+		if inRange(mapped) {
+			if !aMap[toPt(mapped)] {
+				return false
+			}
+			cnt++
+		}
+	}
+	return cnt >= 12
+}
+
 func overlap(ptsA, ptsB [][]int) ([]int, bool) {
 	aMap := lookupMap(ptsA)
 	bMap := lookupMap(ptsB)
 
-	for _, k := range ptsA {
-		for _, l := range ptsB {
-			// identify A with B
-			offset := sub(k, l)
-			good := true
-			cnt := 0
-
-			for _, m := range ptsB {
-				mapped := add(m, offset)
-
-				if inRange(mapped) {
-					if !aMap[toPt(mapped)] {
-						good = false
-						break
-					}
-					cnt++
-				}
+	for _, ptA := range ptsA {
+		for _, ptB := range ptsB {
+			if !scanWorks(sub(ptA, ptB), ptsB, aMap) {
+				continue
 			}
-			if cnt < 12 {
-				good = false
+			if !scanWorks(sub(ptB, ptA), ptsA, bMap) {
+				continue
 			}
-
-			offset = sub(l, k)
-			cnt = 0
-
-			for _, m := range ptsA {
-				mapped := add(m, offset)
-
-				if inRange(mapped) {
-					if !bMap[toPt(mapped)] {
-						good = false
-						break
-					}
-					cnt++
-				}
-			}
-			if cnt < 12 {
-				good = false
-			}
-
-			if good {
-				return sub(k, l), true
-			}
+			return sub(ptA, ptB), true
 		}
 	}
 
@@ -179,8 +177,14 @@ func main() {
 
 	rotations := makeRotations()
 
-	chains := make(map[int]*Chain)
-	chains[0] = nil
+	transforms := make(map[int]Transform)
+	transforms[0] = Transform{
+		Offset: []int{0, 0, 0},
+		Rot: Rot{
+			Ord:  []int{0, 1, 2},
+			Flip: []int{1, 1, 1},
+		},
+	}
 
 	queue := []int{0}
 	for len(queue) > 0 {
@@ -192,7 +196,7 @@ func main() {
 			if i == j {
 				continue
 			}
-			if _, ok := chains[j]; ok {
+			if _, ok := transforms[j]; ok {
 				continue
 			}
 
@@ -201,14 +205,12 @@ func main() {
 				for _, pt := range scanners[j] {
 					ptsB = append(ptsB, applyRot(rot, pt))
 				}
-
 				if offset, ok := overlap(ptsA, ptsB); ok {
 					queue = append(queue, j)
-					chains[j] = &Chain{
-						Prev:   chains[i],
+					transforms[j] = chainTransforms(transforms[i], Transform{
 						Offset: offset,
 						Rot:    rot,
-					}
+					})
 					break
 				}
 			}
@@ -218,14 +220,14 @@ func main() {
 	all := make(map[Pt]bool)
 	for i := range scanners {
 		for _, pt := range scanners[i] {
-			all[toPt(applyChain(chains[i], pt))] = true
+			all[toPt(applyTransform(transforms[i], pt))] = true
 		}
 	}
 	log.Println(len(all))
 
 	locs := [][]int{}
 	for i := range scanners {
-		locs = append(locs, applyChain(chains[i], []int{0, 0, 0}))
+		locs = append(locs, transforms[i].Offset)
 	}
 
 	mx := 0
