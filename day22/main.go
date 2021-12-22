@@ -4,32 +4,50 @@ import (
 	"io"
 	"log"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 )
 
 type Cube struct {
-	On                     bool
+	value                  int
 	x1, x2, y1, y2, z1, z2 int
 }
 
-type Compressor struct {
-	Values []int
-	Lookup map[int]int
-}
-
-func (c *Compressor) Add(x int) {
-	c.Values = append(c.Values, x)
-	c.Values = append(c.Values, x+1)
-}
-
-func (c *Compressor) Compress() {
-	sort.Ints(c.Values)
-	c.Lookup = make(map[int]int)
-	for i, v := range c.Values {
-		c.Lookup[v] = i
+func intersect(a1, a2, b1, b2 int) (int, int, bool) {
+	c1 := a1
+	if b1 > c1 {
+		c1 = b1
 	}
+	c2 := a2
+	if b2 < c2 {
+		c2 = b2
+	}
+	if c1 > c2 {
+		return 0, 0, false
+	}
+	return c1, c2, true
+}
+
+func Intersect(a, b Cube) (Cube, bool) {
+	c := Cube{}
+	ok := true
+
+	c.x1, c.x2, ok = intersect(a.x1, a.x2, b.x1, b.x2)
+	if !ok {
+		return Cube{}, false
+	}
+
+	c.y1, c.y2, ok = intersect(a.y1, a.y2, b.y1, b.y2)
+	if !ok {
+		return Cube{}, false
+	}
+
+	c.z1, c.z2, ok = intersect(a.z1, a.z2, b.z1, b.z2)
+	if !ok {
+		return Cube{}, false
+	}
+
+	return c, true
 }
 
 func main() {
@@ -40,7 +58,7 @@ func main() {
 
 	lines := strings.Split(string(input), "\n")
 
-	var cubes []*Cube
+	var cubes []Cube
 
 	for _, line := range lines {
 		parts := strings.SplitN(line, " x=", 2)
@@ -68,81 +86,53 @@ func main() {
 
 		z2, _ := strconv.Atoi(parts[1])
 
-		cube := &Cube{
-			On: on,
-			x1: x1,
-			x2: x2,
-			y1: y1,
-			y2: y2,
-			z1: z1,
-			z2: z2,
+		value := 0
+		if on {
+			value = 1
 		}
 
-		/*
-			good := false
-			if cube.x1 >= -50 && cube.x2 <= 50 && cube.y1 >= -50 && cube.y2 <= 50 && cube.z1 >= -50 && cube.z2 <= 50 {
-				good = true
-			}
-			if !good {
-				continue
-			}
-		*/
+		cube := Cube{
+			value: value,
+			x1:    x1,
+			x2:    x2,
+			y1:    y1,
+			y2:    y2,
+			z1:    z1,
+			z2:    z2,
+		}
+
+		good := false
+		if cube.x1 >= -50 && cube.x2 <= 50 && cube.y1 >= -50 && cube.y2 <= 50 && cube.z1 >= -50 && cube.z2 <= 50 {
+			good = true
+		}
+		if !good {
+			continue
+		}
 
 		cubes = append(cubes, cube)
 	}
 
-	xC := &Compressor{}
-	yC := &Compressor{}
-	zC := &Compressor{}
-	for _, cube := range cubes {
-		xC.Add(cube.x1)
-		xC.Add(cube.x2)
-		yC.Add(cube.y1)
-		yC.Add(cube.y2)
-		zC.Add(cube.z1)
-		zC.Add(cube.z2)
-	}
-	xC.Compress()
-	yC.Compress()
-	zC.Compress()
-	for _, cube := range cubes {
-		cube.x1 = xC.Lookup[cube.x1]
-		cube.x2 = xC.Lookup[cube.x2]
-		cube.y1 = yC.Lookup[cube.y1]
-		cube.y2 = yC.Lookup[cube.y2]
-		cube.z1 = zC.Lookup[cube.z1]
-		cube.z2 = zC.Lookup[cube.z2]
-	}
-
-	m := make([][][]bool, len(xC.Values))
-	for x := range m {
-		m[x] = make([][]bool, len(yC.Values))
-		for y := range m[x] {
-			m[x][y] = make([]bool, len(zC.Values))
-		}
-	}
+	current := []Cube{}
 
 	for _, cube := range cubes {
-		for x := cube.x1; x <= cube.x2; x++ {
-			for y := cube.y1; y <= cube.y2; y++ {
-				for z := cube.z1; z <= cube.z2; z++ {
-					m[x][y][z] = cube.On
-				}
+		for _, other := range current {
+			c, ok := Intersect(cube, other)
+			if ok {
+				c.value = -other.value
+				current = append(current, c)
 			}
 		}
-	}
-
-	count := 0
-	for x := range m {
-		for y := range m[x] {
-			for z := range m[x][y] {
-				if m[x][y][z] {
-					count += (xC.Values[x+1] - xC.Values[x]) *
-						(yC.Values[y+1] - yC.Values[y]) *
-						(zC.Values[z+1] - zC.Values[z])
-				}
-			}
+		if cube.value != 0 {
+			current = append(current, cube)
 		}
 	}
-	log.Println(count)
+
+	answer := 0
+	for _, cube := range current {
+		answer += cube.value *
+			(1 + cube.x2 - cube.x1) *
+			(1 + cube.y2 - cube.y1) *
+			(1 + cube.z2 - cube.z1)
+	}
+	log.Println(answer)
 }
